@@ -1,0 +1,1314 @@
+openapi: 3.1.0
+info:
+  title: MarkFlow API
+  version: 1.0.0-draft
+  description: MarkFlow — 마크다운 노드 기반 실시간 협업 캔버스 API 명세. REST + Liveblocks Realtime 인증 포함.
+servers:
+- url: https://api.markflow.app/api
+  description: Production example
+- url: http://localhost:3000/api
+  description: Local development
+tags:
+- name: Auth
+  description: 회원가입, 로그인, 내 정보, 토큰
+- name: Projects
+  description: 프로젝트 생성, 조회, 수정, 삭제, 복구
+- name: Canvas
+  description: 캔버스 스냅샷, 노드, 엣지, 휴지통
+- name: Chat
+  description: 프로젝트 단위 채팅
+- name: History
+  description: 노드 변경 로그 및 프로젝트 타임라인
+- name: Members
+  description: 멤버와 권한 관리
+- name: Realtime
+  description: Liveblocks 룸 인증
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    NodeId:
+      name: nodeId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EdgeId:
+      name: edgeId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
+    BeforeCursor:
+      name: before
+      in: query
+      required: false
+      schema:
+        type: string
+      description: ISO8601 timestamp 또는 id cursor
+  responses:
+    Unauthorized:
+      description: 토큰 없음, 만료, 무효
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: 권한 부족
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: 리소스 없음 또는 접근 불가
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    ValidationError:
+      description: 입력 검증 실패
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: 중복 데이터
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unprocessable:
+      description: 비즈니스 규칙 위반
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    Role:
+      type: string
+      enum:
+      - OWNER
+      - EDITOR
+      - VIEWER
+    NodeType:
+      type: string
+      enum:
+      - idea
+      - doc
+      - task
+      - decision
+      - data
+    HistoryAction:
+      type: string
+      enum:
+      - CREATE
+      - UPDATE
+      - MOVE
+      - DELETE
+      - RESTORE
+    ErrorCode:
+      type: string
+      enum:
+      - VALIDATION_ERROR
+      - UNAUTHORIZED
+      - FORBIDDEN
+      - NOT_FOUND
+      - CONFLICT
+      - UNPROCESSABLE
+      - INTERNAL
+    ErrorResponse:
+      type: object
+      required:
+      - error
+      properties:
+        error:
+          type: object
+          required:
+          - code
+          - message
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+            details: {}
+    User:
+      type: object
+      required:
+      - id
+      - email
+      - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+    AuthResponse:
+      type: object
+      required:
+      - accessToken
+      - user
+      properties:
+        accessToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+    SignupRequest:
+      type: object
+      required:
+      - name
+      - email
+      - password
+      properties:
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+    LoginRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    ProjectListItem:
+      type: object
+      required:
+      - id
+      - name
+      - role
+      - isOwner
+      - nodeCount
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        isOwner:
+          type: boolean
+        nodeCount:
+          type: integer
+        updatedAt:
+          type: string
+          format: date-time
+    ProjectCreateRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+    ProjectUpdateRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+    ProjectCreateResponse:
+      allOf:
+      - $ref: '#/components/schemas/ProjectListItem'
+    ProjectUpdateResponse:
+      type: object
+      required:
+      - id
+      - name
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+    DeletedResponse:
+      type: object
+      required:
+      - id
+      - deletedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        deletedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+    Position:
+      type: object
+      required:
+      - x
+      - y
+      properties:
+        x:
+          type: number
+        y:
+          type: number
+    CanvasProject:
+      type: object
+      required:
+      - id
+      - name
+      - role
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+    Node:
+      type: object
+      required:
+      - id
+      - type
+      - title
+      - markdown
+      - collapsed
+      - position
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/NodeType'
+        title:
+          type: string
+        markdown:
+          type: string
+        collapsed:
+          type: boolean
+        position:
+          $ref: '#/components/schemas/Position'
+        updatedAt:
+          type: string
+          format: date-time
+    Edge:
+      type: object
+      required:
+      - id
+      - source
+      - target
+      properties:
+        id:
+          type: string
+          format: uuid
+        source:
+          type: string
+          format: uuid
+        target:
+          type: string
+          format: uuid
+    CanvasSnapshot:
+      type: object
+      required:
+      - project
+      - nodes
+      - edges
+      properties:
+        project:
+          $ref: '#/components/schemas/CanvasProject'
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Node'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/Edge'
+    NodeCreateRequest:
+      type: object
+      required:
+      - title
+      - markdown
+      - type
+      - position
+      properties:
+        title:
+          type: string
+        markdown:
+          type: string
+        type:
+          $ref: '#/components/schemas/NodeType'
+        position:
+          $ref: '#/components/schemas/Position'
+    NodePatchRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        markdown:
+          type: string
+        type:
+          $ref: '#/components/schemas/NodeType'
+        collapsed:
+          type: boolean
+        position:
+          $ref: '#/components/schemas/Position'
+    EdgeCreateRequest:
+      type: object
+      required:
+      - source
+      - target
+      properties:
+        source:
+          type: string
+          format: uuid
+        target:
+          type: string
+          format: uuid
+    CanvasSaveRequest:
+      type: object
+      required:
+      - nodes
+      - edges
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Node'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/Edge'
+    SavedResponse:
+      type: object
+      required:
+      - savedAt
+      properties:
+        savedAt:
+          type: string
+          format: date-time
+    TrashNode:
+      type: object
+      required:
+      - id
+      - title
+      - type
+      - deletedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        type:
+          $ref: '#/components/schemas/NodeType'
+        deletedAt:
+          type: string
+          format: date-time
+    TrashResponse:
+      type: object
+      required:
+      - nodes
+      properties:
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrashNode'
+    MessageUser:
+      type: object
+      required:
+      - id
+      - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+    ChatMessage:
+      type: object
+      required:
+      - id
+      - content
+      - createdAt
+      - user
+      properties:
+        id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/MessageUser'
+    MessageCreateRequest:
+      type: object
+      required:
+      - content
+      properties:
+        content:
+          type: string
+          minLength: 1
+    MessagesResponse:
+      type: object
+      required:
+      - messages
+      - nextCursor
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    NodeHistoryItem:
+      type: object
+      required:
+      - id
+      - action
+      - createdAt
+      - user
+      properties:
+        id:
+          type: string
+          format: uuid
+        action:
+          $ref: '#/components/schemas/HistoryAction'
+        createdAt:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/MessageUser'
+    ProjectHistoryItem:
+      allOf:
+      - $ref: '#/components/schemas/NodeHistoryItem'
+      - type: object
+        properties:
+          nodeId:
+            type:
+            - string
+            - 'null'
+            format: uuid
+          nodeTitle:
+            type:
+            - string
+            - 'null'
+    NodeHistoryResponse:
+      type: object
+      required:
+      - history
+      properties:
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/NodeHistoryItem'
+    ProjectHistoryResponse:
+      type: object
+      required:
+      - history
+      - nextCursor
+      properties:
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectHistoryItem'
+        nextCursor:
+          type:
+          - string
+          - 'null'
+    Member:
+      type: object
+      required:
+      - userId
+      - name
+      - email
+      - role
+      properties:
+        userId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          $ref: '#/components/schemas/Role'
+    MembersResponse:
+      type: object
+      required:
+      - members
+      properties:
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+    MemberInviteRequest:
+      type: object
+      required:
+      - email
+      - role
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum:
+          - EDITOR
+          - VIEWER
+    MemberRoleUpdateRequest:
+      type: object
+      required:
+      - role
+      properties:
+        role:
+          type: string
+          enum:
+          - EDITOR
+          - VIEWER
+    MemberDeleteResponse:
+      type: object
+      required:
+      - userId
+      properties:
+        userId:
+          type: string
+          format: uuid
+    LiveblocksAuthRequest:
+      type: object
+      required:
+      - room
+      properties:
+        room:
+          type: string
+          pattern: ^project:[0-9a-fA-F-]{36}$
+          example: project:550e8400-e29b-41d4-a716-446655440000
+    LiveblocksAuthResponse:
+      type: object
+      description: Liveblocks 서버 SDK가 반환하는 인증 payload. 실제 필드는 SDK 버전에 따라 달라질 수 있다.
+      additionalProperties: true
+paths:
+  /auth/signup:
+    post:
+      tags:
+      - Auth
+      summary: 회원가입
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: 회원가입 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /auth/login:
+    post:
+      tags:
+      - Auth
+      summary: 로그인
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 로그인 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/me:
+    get:
+      tags:
+      - Auth
+      summary: 내 정보 조회
+      security: &id001
+      - bearerAuth: []
+      responses:
+        '200':
+          description: 현재 사용자
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /auth/refresh:
+    post:
+      tags:
+      - Auth
+      summary: 토큰 갱신
+      description: 선택 구현
+      responses:
+        '200':
+          description: 새 accessToken
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - accessToken
+                properties:
+                  accessToken:
+                    type: string
+  /auth/logout:
+    post:
+      tags:
+      - Auth
+      summary: 로그아웃
+      description: 선택 구현
+      security: *id001
+      responses:
+        '200':
+          description: 로그아웃 성공
+  /projects:
+    get:
+      tags:
+      - Projects
+      summary: 내 프로젝트 목록
+      security: *id001
+      responses:
+        '200':
+          description: 프로젝트 목록
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - projects
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProjectListItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+      - Projects
+      summary: 프로젝트 생성
+      security: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreateRequest'
+      responses:
+        '201':
+          description: 프로젝트 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectCreateResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /projects/{projectId}:
+    patch:
+      tags:
+      - Projects
+      summary: 프로젝트 이름 변경
+      description: OWNER only
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdateRequest'
+      responses:
+        '200':
+          description: 변경 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectUpdateResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+      - Projects
+      summary: 프로젝트 삭제
+      description: OWNER only. 소프트 삭제.
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: 삭제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/restore:
+    post:
+      tags:
+      - Projects
+      summary: 프로젝트 복구
+      description: OWNER only
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: 복구 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/canvas:
+    get:
+      tags:
+      - Canvas
+      summary: 캔버스 스냅샷 조회
+      description: 모든 멤버 조회 가능
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: 캔버스 스냅샷
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CanvasSnapshot'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+      - Canvas
+      summary: 캔버스 일괄 저장
+      description: EDITOR+ only. debounce 자동 저장 또는 수동 저장용 선택 구현.
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CanvasSaveRequest'
+      responses:
+        '200':
+          description: 저장 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SavedResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/nodes:
+    post:
+      tags:
+      - Canvas
+      summary: 노드 생성
+      description: EDITOR+ only
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NodeCreateRequest'
+      responses:
+        '201':
+          description: 노드 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/nodes/{nodeId}:
+    patch:
+      tags:
+      - Canvas
+      summary: 노드 수정/이동
+      description: EDITOR+ only. 위치만 변경 시 MOVE, 그 외 UPDATE 기록.
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/NodeId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NodePatchRequest'
+      responses:
+        '200':
+          description: 노드 갱신 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Node'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+      - Canvas
+      summary: 노드 삭제
+      description: EDITOR+ only. 노드는 소프트 삭제, 연결된 엣지는 물리 삭제.
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/NodeId'
+      responses:
+        '200':
+          description: 노드 삭제 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/nodes/{nodeId}/restore:
+    post:
+      tags:
+      - Canvas
+      summary: 노드 복구
+      description: EDITOR+ only. 삭제 시 제거된 엣지는 복원하지 않는다.
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/NodeId'
+      responses:
+        '200':
+          description: 노드 복구 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeletedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/edges:
+    post:
+      tags:
+      - Canvas
+      summary: 엣지 생성
+      description: EDITOR+ only. 자기 연결 금지, 동일 방향 중복 금지.
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EdgeCreateRequest'
+      responses:
+        '201':
+          description: 엣지 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Edge'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /projects/{projectId}/edges/{edgeId}:
+    delete:
+      tags:
+      - Canvas
+      summary: 엣지 삭제
+      description: EDITOR+ only. 물리 삭제.
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EdgeId'
+      responses:
+        '200':
+          description: 엣지 삭제 성공
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - id
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/trash:
+    get:
+      tags:
+      - Canvas
+      summary: 휴지통 목록
+      description: 모든 멤버 조회 가능
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: 휴지통 노드 목록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrashResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/messages:
+    get:
+      tags:
+      - Chat
+      summary: 메시지 목록
+      description: 모든 멤버 조회 가능
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/BeforeCursor'
+      responses:
+        '200':
+          description: 메시지 목록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+      - Chat
+      summary: 메시지 작성
+      description: EDITOR+ only
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageCreateRequest'
+      responses:
+        '201':
+          description: 메시지 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatMessage'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/nodes/{nodeId}/history:
+    get:
+      tags:
+      - History
+      summary: 노드별 히스토리
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/NodeId'
+      responses:
+        '200':
+          description: 노드 히스토리
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeHistoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/history:
+    get:
+      tags:
+      - History
+      summary: 프로젝트 전체 타임라인
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/BeforeCursor'
+      responses:
+        '200':
+          description: 프로젝트 히스토리
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectHistoryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /projects/{projectId}/members:
+    get:
+      tags:
+      - Members
+      summary: 멤버 목록
+      description: 모든 멤버 조회 가능
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: 멤버 목록
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MembersResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags:
+      - Members
+      summary: 멤버 초대
+      description: OWNER only. MVP는 기가입 유저만 초대.
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberInviteRequest'
+      responses:
+        '201':
+          description: 멤버 추가 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /projects/{projectId}/members/{userId}:
+    patch:
+      tags:
+      - Members
+      summary: 멤버 권한 변경
+      description: OWNER only. OWNER 변경/양도는 범위 밖.
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberRoleUpdateRequest'
+      responses:
+        '200':
+          description: 권한 변경 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+    delete:
+      tags:
+      - Members
+      summary: 멤버 제거
+      description: OWNER only. OWNER 자신은 제거 불가.
+      security: *id001
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: 멤버 제거 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberDeleteResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+  /realtime/liveblocks-auth:
+    post:
+      tags:
+      - Realtime
+      summary: Liveblocks 룸 인증
+      description: JWT 사용자 식별 후 ProjectMember.role에 따라 READ/WRITE 권한을 부여한다.
+      security: *id001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LiveblocksAuthRequest'
+      responses:
+        '200':
+          description: Liveblocks 인증 payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveblocksAuthResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
