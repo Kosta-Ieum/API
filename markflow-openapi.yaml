@@ -2,8 +2,9 @@ openapi: 3.1.0
 info:
   title: MarkFlow API
   version: 1.1.0-draft
-  description: MarkFlow — 마크다운 노드 기반 실시간 협업 캔버스 API 명세. REST + Liveblocks Realtime 인증 포함. v1.1은 ActivityLog, 프로젝트/노드 휴지통,
-    영구 삭제 엔드포인트를 반영한다.
+  description: 'MarkFlow — 마크다운 노드 기반 실시간 협업 캔버스 API 명세. REST는 이 문서가 기계 판독 정본이다. 실시간(멀티커서·노드
+    동기화·소프트 락·채팅)은 Socket.io 직접 구현이 정본이며, 이벤트/페이로드 계약 정본은 packages/shared/src(SOCKET_EVENTS +
+    zod schema)다. v1.1은 ActivityLog, 프로젝트/노드 휴지통, 영구 삭제 엔드포인트를 반영한다.'
 servers:
 - url: https://api.markflow.app/api
   description: Production example
@@ -27,7 +28,9 @@ tags:
 - name: Members
   description: 멤버 조회, 초대, 권한 변경, 제거
 - name: Realtime
-  description: Liveblocks 룸 인증
+  description: 'Socket.io 실시간 계약(정본은 packages/shared/src). 연결은 REST 경로가 아니라 WebSocket 핸드셰이크로
+    한다 — 클라이언트는 핸드셰이크 auth에 JWT를 실어 보내고, 서버가 검증한 뒤 room=project:<id>로 join한다. 이후 모든 변경 이벤트마다
+    서버가 ProjectMember.role로 권한을 재검사한다(VIEWER 변경 거부). 이벤트명/페이로드는 SOCKET_EVENTS와 zod schema를 따른다.'
 security: &id001
 - bearerAuth: []
 paths:
@@ -1385,51 +1388,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /realtime/liveblocks-auth:
-    post:
-      tags:
-      - Realtime
-      summary: Liveblocks 룸 인증
-      description: JWT로 사용자 식별 후 ProjectMember.role에 따라 VIEWER는 READ, EDITOR/OWNER는 WRITE 권한 부여.
-      operationId: liveblocksAuth
-      security: *id001
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/LiveblocksAuthRequest'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LiveblocksAuthResponse'
-        '400':
-          description: ValidationError
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '403':
-          description: Forbidden
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: Internal
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -1463,7 +1421,12 @@ components:
               type: string
               example: 이 작업을 수행할 권한이 없습니다.
             details:
-              nullable: true
+              type:
+              - object
+              - array
+              - string
+              - 'null'
+              example: null
     User:
       type: object
       required:
@@ -1618,9 +1581,10 @@ components:
       properties:
         id: *id003
         deletedAt:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
           example: null
     DeletedProject:
       type: object
@@ -1753,9 +1717,10 @@ components:
       properties:
         id: *id003
         deletedAt:
-          type: string
+          type:
+          - string
+          - 'null'
           format: date-time
-          nullable: true
           example: null
     TrashNode:
       type: object
@@ -2029,18 +1994,3 @@ components:
       - userId
       properties:
         userId: *id003
-    LiveblocksAuthRequest:
-      type: object
-      required:
-      - room
-      properties:
-        room:
-          type: string
-          pattern: ^project:.+
-          example: project:550e8400-e29b-41d4-a716-446655440000
-    LiveblocksAuthResponse:
-      type: object
-      description: Liveblocks 토큰 응답. 실제 필드명은 Liveblocks SDK 서버 응답 포맷에 맞춘다.
-      additionalProperties: true
-      example:
-        token: liveblocks-token
